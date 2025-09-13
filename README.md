@@ -15,7 +15,7 @@ Add this to your `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/yourusername/dfixxer-pre-commit
+  - repo: https://github.com/tuncb/dfixxer-pre-commit
     rev: main
     hooks:
       - id: dfixxer

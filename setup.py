@@ -4,9 +4,9 @@ setup(
     name="dfixxer-pre-commit",
     version="0.1.0",
     description="Pre-commit hook for dfixxer (Delphi/Pascal code formatter)",
-    author="Your Name",
-    author_email="your.email@example.com",
-    url="https://github.com/yourusername/dfixxer-pre-commit",
+    author="Tunc Bahcecioglu",
+    author_email="tuncbah@example.com",
+    url="https://github.com/tuncb/dfixxer-pre-commit",
     py_modules=["dfixxer_hook"],
     entry_points={
         "console_scripts": [
