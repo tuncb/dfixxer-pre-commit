@@ -1,6 +1,6 @@
 # dfixxer-pre-commit
 
-A pre-commit hook for [dfixxer](https://github.com/tuncb/dfixxer), a Delphi/Pascal source code formatter that automatically formats and sorts "uses" sections.
+A pre-commit hook for [dfixxer](https://github.com/tuncb/dfixxer), a Delphi/Pascal source code formatter.
 
 ## Features
 
