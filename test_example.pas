@@ -1,8 +1,10 @@
 program TestExample;
 
 uses
-  Classes,SysUtils,
-  Forms, Dialogs;
+  Dialogs,
+  Forms,
+  System.Classes,
+  System.SysUtils;
 
 var
   MyString: string;
