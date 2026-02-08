@@ -4,16 +4,21 @@
 import argparse
 import json
 import platform
+import shutil
 import subprocess
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 from typing import List, Optional
+
+DFIXXER_RELEASE_TAG = "v0.9.2"
+DFIXXER_RELEASE_API_URL = f"https://api.github.com/repos/tuncb/dfixxer/releases/tags/{DFIXXER_RELEASE_TAG}"
 
 
 def get_cache_dir() -> Path:
     """Get the cache directory for dfixxer binary."""
-    cache_dir = Path.home() / ".cache" / "dfixxer-pre-commit"
+    cache_dir = Path.home() / ".cache" / "dfixxer-pre-commit" / DFIXXER_RELEASE_TAG
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
@@ -41,6 +46,49 @@ def get_binary_name(platform_name: str) -> str:
         return "dfixxer"
 
 
+def find_download_asset(release_data: dict, platform_name: str, arch: str) -> tuple[Optional[str], Optional[str], bool]:
+    """Find the preferred download URL for a platform (binary first, then zip)."""
+    assets = release_data.get("assets", [])
+    base_name = f"dfixxer-{platform_name}-{arch}"
+
+    binary_asset_names = [base_name]
+    if platform_name == "windows":
+        binary_asset_names = [f"{base_name}.exe", f"{base_name}-{DFIXXER_RELEASE_TAG}.exe"]
+    else:
+        binary_asset_names = [base_name, f"{base_name}-{DFIXXER_RELEASE_TAG}"]
+
+    zip_asset_names = [f"{base_name}-{DFIXXER_RELEASE_TAG}.zip", f"{base_name}.zip"]
+
+    preferred_names = binary_asset_names + zip_asset_names
+    for expected_name in preferred_names:
+        for asset in assets:
+            if asset.get("name") == expected_name:
+                return asset.get("browser_download_url"), expected_name, expected_name.endswith(".zip")
+
+    for asset in assets:
+        asset_name = asset.get("name", "")
+        if asset_name.startswith(base_name) and asset_name.endswith(".zip"):
+            return asset.get("browser_download_url"), asset_name, True
+
+    return None, None, False
+
+
+def extract_binary_from_zip(zip_path: Path, binary_name: str, output_path: Path) -> None:
+    """Extract the expected dfixxer binary from a zip archive."""
+    with zipfile.ZipFile(zip_path) as zip_file:
+        matches = [
+            item
+            for item in zip_file.infolist()
+            if not item.is_dir() and Path(item.filename).name.lower() == binary_name.lower()
+        ]
+
+        if not matches:
+            raise RuntimeError(f"Zip archive {zip_path.name} does not contain {binary_name}")
+
+        with zip_file.open(matches[0]) as source, output_path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+
+
 def download_dfixxer() -> Path:
     """Download dfixxer binary to cache directory."""
     cache_dir = get_cache_dir()
@@ -53,52 +101,28 @@ def download_dfixxer() -> Path:
 
     print("dfixxer not found, downloading...")
 
-    # Get release info and explicitly prefer stable (non-pre-release) versions.
-    api_url = "https://api.github.com/repos/tuncb/dfixxer/releases/latest"
+    # Get release info from a specific pinned tag.
     try:
-        with urllib.request.urlopen(api_url) as response:
+        with urllib.request.urlopen(DFIXXER_RELEASE_API_URL) as response:
             release_data = json.loads(response.read().decode())
     except Exception as e:
-        raise RuntimeError(f"Failed to fetch release info: {e}")
+        raise RuntimeError(f"Failed to fetch release info for {DFIXXER_RELEASE_TAG}: {e}")
 
-    if release_data.get("prerelease") or release_data.get("draft"):
-        releases_url = "https://api.github.com/repos/tuncb/dfixxer/releases"
-        try:
-            with urllib.request.urlopen(releases_url) as response:
-                releases = json.loads(response.read().decode())
-        except Exception as e:
-            raise RuntimeError(f"Failed to fetch releases list: {e}")
-
-        stable_release = next(
-            (
-                release
-                for release in releases
-                if not release.get("prerelease") and not release.get("draft")
-            ),
-            None,
-        )
-        if not stable_release:
-            raise RuntimeError("No stable release found (non-pre-release, non-draft)")
-        release_data = stable_release
-
-    # Find the correct asset
-    asset_name = f"dfixxer-{platform_name}-{arch}"
-    if platform_name == "windows":
-        asset_name += ".exe"
-
-    download_url = None
-    for asset in release_data["assets"]:
-        if asset["name"] == asset_name:
-            download_url = asset["browser_download_url"]
-            break
+    download_url, asset_name, is_zip = find_download_asset(release_data, platform_name, arch)
 
     if not download_url:
-        raise RuntimeError(f"No binary found for {platform_name}-{arch}")
+        raise RuntimeError(f"No binary found for {platform_name}-{arch} in release {DFIXXER_RELEASE_TAG}")
 
-    # Download the binary
+    # Download the binary (directly or extracted from zip).
     try:
         print(f"Downloading {download_url}...")
-        urllib.request.urlretrieve(download_url, binary_path)
+        if is_zip:
+            archive_path = cache_dir / asset_name
+            urllib.request.urlretrieve(download_url, archive_path)
+            extract_binary_from_zip(archive_path, binary_name, binary_path)
+            archive_path.unlink(missing_ok=True)
+        else:
+            urllib.request.urlretrieve(download_url, binary_path)
         binary_path.chmod(0o755)  # Make executable on Unix-like systems
         print(f"Downloaded dfixxer to {binary_path}")
         return binary_path
