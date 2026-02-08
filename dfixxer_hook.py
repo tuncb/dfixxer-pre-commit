@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import os
 import platform
 import subprocess
 import sys
@@ -54,13 +53,33 @@ def download_dfixxer() -> Path:
 
     print("dfixxer not found, downloading...")
 
-    # Get latest release info
+    # Get release info and explicitly prefer stable (non-pre-release) versions.
     api_url = "https://api.github.com/repos/tuncb/dfixxer/releases/latest"
     try:
         with urllib.request.urlopen(api_url) as response:
             release_data = json.loads(response.read().decode())
     except Exception as e:
         raise RuntimeError(f"Failed to fetch release info: {e}")
+
+    if release_data.get("prerelease") or release_data.get("draft"):
+        releases_url = "https://api.github.com/repos/tuncb/dfixxer/releases"
+        try:
+            with urllib.request.urlopen(releases_url) as response:
+                releases = json.loads(response.read().decode())
+        except Exception as e:
+            raise RuntimeError(f"Failed to fetch releases list: {e}")
+
+        stable_release = next(
+            (
+                release
+                for release in releases
+                if not release.get("prerelease") and not release.get("draft")
+            ),
+            None,
+        )
+        if not stable_release:
+            raise RuntimeError("No stable release found (non-pre-release, non-draft)")
+        release_data = stable_release
 
     # Find the correct asset
     asset_name = f"dfixxer-{platform_name}-{arch}"

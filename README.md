@@ -5,6 +5,7 @@ A pre-commit hook for [dfixxer](https://github.com/tuncb/dfixxer), a Delphi/Pasc
 ## Features
 
 - **Automatic Installation**: Downloads dfixxer binary from GitHub releases if not found
+- **Stable Releases Only**: Uses non-pre-release, non-draft GitHub releases
 - **Cross-Platform**: Supports Windows, macOS, and Linux (x86_64)
 - **Caching**: Downloads binary once and reuses it for better performance
 - **Pascal File Support**: Automatically formats `.pas` files before commits
