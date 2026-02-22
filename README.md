@@ -5,7 +5,7 @@ A pre-commit hook for [dfixxer](https://github.com/tuncb/dfixxer), a Delphi/Pasc
 ## Features
 
 - **Automatic Installation**: Downloads dfixxer binary from GitHub releases if not found
-- **Pinned Release**: Downloads from GitHub release `v0.9.2`
+- **Pinned Release**: Downloads from GitHub release `v0.10.2`
 - **Zip Asset Support**: Extracts `dfixxer` from release zip files when needed
 - **Cross-Platform**: Supports Windows, macOS, and Linux (x86_64)
 - **Caching**: Downloads binary once and reuses it for better performance
@@ -33,8 +33,8 @@ pre-commit install
 
 The hook will:
 1. Check if dfixxer is already installed on your system
-2. If not found, automatically download the appropriate binary for your platform from release `v0.9.2`
-3. Cache the binary in `~/.cache/dfixxer-pre-commit/v0.9.2/` for future use
+2. If not found, automatically download the appropriate binary for your platform from release `v0.10.2`
+3. Cache the binary in `~/.cache/dfixxer-pre-commit/v0.10.2/` for future use
 4. Run `dfixxer update` on all `.pas` files being committed
 5. Format and sort the "uses" sections according to dfixxer's configuration
 
