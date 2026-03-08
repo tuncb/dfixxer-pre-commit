@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Optional
 
-DFIXXER_RELEASE_TAG = "v0.10.2"
+DFIXXER_RELEASE_TAG = "v0.11.0"
 DFIXXER_RELEASE_API_URL = f"https://api.github.com/repos/tuncb/dfixxer/releases/tags/{DFIXXER_RELEASE_TAG}"
 
 
