@@ -7,12 +7,13 @@ import platform
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
 from typing import List, Optional
 
-DFIXXER_RELEASE_TAG = "v0.11.0"
+DFIXXER_RELEASE_TAG = "v0.14.0"
 DFIXXER_RELEASE_API_URL = f"https://api.github.com/repos/tuncb/dfixxer/releases/tags/{DFIXXER_RELEASE_TAG}"
 
 
@@ -46,8 +47,8 @@ def get_binary_name(platform_name: str) -> str:
         return "dfixxer"
 
 
-def find_download_asset(release_data: dict, platform_name: str, arch: str) -> tuple[Optional[str], Optional[str], bool]:
-    """Find the preferred download URL for a platform (binary first, then zip)."""
+def find_download_asset(release_data: dict, platform_name: str, arch: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Find the preferred download URL for a platform (binary first, then archive)."""
     assets = release_data.get("assets", [])
     base_name = f"dfixxer-{platform_name}-{arch}"
 
@@ -57,20 +58,33 @@ def find_download_asset(release_data: dict, platform_name: str, arch: str) -> tu
     else:
         binary_asset_names = [base_name, f"{base_name}-{DFIXXER_RELEASE_TAG}"]
 
-    zip_asset_names = [f"{base_name}-{DFIXXER_RELEASE_TAG}.zip", f"{base_name}.zip"]
+    archive_asset_names = [
+        (f"{base_name}-{DFIXXER_RELEASE_TAG}.zip", "zip"),
+        (f"{base_name}.zip", "zip"),
+        (f"{base_name}-{DFIXXER_RELEASE_TAG}.tar.gz", "tar.gz"),
+        (f"{base_name}.tar.gz", "tar.gz"),
+        (f"{base_name}-{DFIXXER_RELEASE_TAG}.tgz", "tar.gz"),
+        (f"{base_name}.tgz", "tar.gz"),
+    ]
 
-    preferred_names = binary_asset_names + zip_asset_names
-    for expected_name in preferred_names:
+    for expected_name in binary_asset_names:
         for asset in assets:
             if asset.get("name") == expected_name:
-                return asset.get("browser_download_url"), expected_name, expected_name.endswith(".zip")
+                return asset.get("browser_download_url"), expected_name, None
+
+    for expected_name, archive_type in archive_asset_names:
+        for asset in assets:
+            if asset.get("name") == expected_name:
+                return asset.get("browser_download_url"), expected_name, archive_type
 
     for asset in assets:
         asset_name = asset.get("name", "")
         if asset_name.startswith(base_name) and asset_name.endswith(".zip"):
-            return asset.get("browser_download_url"), asset_name, True
+            return asset.get("browser_download_url"), asset_name, "zip"
+        if asset_name.startswith(base_name) and (asset_name.endswith(".tar.gz") or asset_name.endswith(".tgz")):
+            return asset.get("browser_download_url"), asset_name, "tar.gz"
 
-    return None, None, False
+    return None, None, None
 
 
 def extract_binary_from_zip(zip_path: Path, binary_name: str, output_path: Path) -> None:
@@ -86,6 +100,26 @@ def extract_binary_from_zip(zip_path: Path, binary_name: str, output_path: Path)
             raise RuntimeError(f"Zip archive {zip_path.name} does not contain {binary_name}")
 
         with zip_file.open(matches[0]) as source, output_path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+
+
+def extract_binary_from_tar_gz(archive_path: Path, binary_name: str, output_path: Path) -> None:
+    """Extract the expected dfixxer binary from a tar.gz archive."""
+    with tarfile.open(archive_path, "r:gz") as tar_file:
+        matches = [
+            item
+            for item in tar_file.getmembers()
+            if item.isfile() and Path(item.name).name.lower() == binary_name.lower()
+        ]
+
+        if not matches:
+            raise RuntimeError(f"Tar archive {archive_path.name} does not contain {binary_name}")
+
+        source = tar_file.extractfile(matches[0])
+        if source is None:
+            raise RuntimeError(f"Failed to extract {binary_name} from {archive_path.name}")
+
+        with source, output_path.open("wb") as target:
             shutil.copyfileobj(source, target)
 
 
@@ -108,7 +142,7 @@ def download_dfixxer() -> Path:
     except Exception as e:
         raise RuntimeError(f"Failed to fetch release info for {DFIXXER_RELEASE_TAG}: {e}")
 
-    download_url, asset_name, is_zip = find_download_asset(release_data, platform_name, arch)
+    download_url, asset_name, archive_type = find_download_asset(release_data, platform_name, arch)
 
     if not download_url:
         raise RuntimeError(f"No binary found for {platform_name}-{arch} in release {DFIXXER_RELEASE_TAG}")
@@ -116,10 +150,15 @@ def download_dfixxer() -> Path:
     # Download the binary (directly or extracted from zip).
     try:
         print(f"Downloading {download_url}...")
-        if is_zip:
+        if archive_type:
             archive_path = cache_dir / asset_name
             urllib.request.urlretrieve(download_url, archive_path)
-            extract_binary_from_zip(archive_path, binary_name, binary_path)
+            if archive_type == "zip":
+                extract_binary_from_zip(archive_path, binary_name, binary_path)
+            elif archive_type == "tar.gz":
+                extract_binary_from_tar_gz(archive_path, binary_name, binary_path)
+            else:
+                raise RuntimeError(f"Unsupported archive type: {archive_type}")
             archive_path.unlink(missing_ok=True)
         else:
             urllib.request.urlretrieve(download_url, binary_path)
